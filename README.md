@@ -4,9 +4,9 @@ MQTT Server Client
 
 
 # 1. 依赖环境
-C++14                    clang 已测试AppleClang 9.1.0.9020039
-cmake 2.8+               编译脚本
-boost 1.67               asio 负责通讯
+    C++14                    clang 已测试AppleClang 9.1.0.9020039
+    cmake 2.8+               编译脚本
+    boost 1.67               asio 负责通讯
 
 
 
