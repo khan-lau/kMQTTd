@@ -34,7 +34,13 @@ class MQTTServer : private boost::noncopyable
 {
     public:
 
-
+        /**
+         * @brief Construct a new MQTTServer object
+         * 
+         * @param strIP 绑定IP
+         * @param strPort 绑定端口号
+         * @param nThreads 线程数
+         */
         MQTTServer(string const &strIP, string const &strPort, std::size_t nThreads) : _acceptor{_ioService}, _nThreads{nThreads}
         {
             tcp::resolver resolver(_ioService);
@@ -51,8 +57,8 @@ class MQTTServer : private boost::noncopyable
 
     public:
 
-        void Stop() 
-        { 
+        void Stop()
+        {
             _ioService.stop();
             for (std::vector<std::shared_ptr<std::thread>>::const_iterator it = _listThread.cbegin();
                 it != _listThread.cend(); ++ it)
@@ -80,15 +86,16 @@ class MQTTServer : private boost::noncopyable
         {
             _acceptor.async_accept( [this](const boost::system::error_code& error, ASocket new_socket){
 
-                    if (!error) {
-                        //@TODO 此处可以于ip黑名单或其他基于ip过滤的功能
-                        // if ( this->_blackList.end() == std::find(std::begin(this->_blackList), std::end(this->_blackList), newSession->socket()->remote_endpoint().address() ) ) {
-                            PSocket p_socket = std::make_shared<ASocket>( std::move(new_socket) );
-                            std::shared_ptr<Session> p_session = std::make_shared<Session>( std::move(p_socket) ); //构造了一个shared_ptr指针, 等同于 shared_ptr p(_csocket);
-                            p_session->start();
+                if (!error) {
+                    //@TODO 此处可以于ip黑名单或其他基于ip过滤的功能
+                    if ( this->_blackList.end() == std::find(std::begin(this->_blackList), std::end(this->_blackList), new_socket.remote_endpoint().address() ) ) {
+                        PSocket p_socket = std::make_shared<ASocket>( std::move(new_socket) );
+                        std::shared_ptr<MqttSession> p_session = std::make_shared<MqttSession>( std::move(p_socket) ); //构造了一个shared_ptr指针, 等同于 shared_ptr p(_csocket);
+                        p_session->start();
                     }
-                    this->StartAccept();
-                } );
+                }
+                this->StartAccept();
+            } );
         }
 
 

@@ -31,7 +31,6 @@ using boost::asio::async_read;
 using boost::asio::async_write;
 
 
-
 //typedef deque<MqttMessage> message_queue;
 
 typedef struct MqttContext{
@@ -46,54 +45,45 @@ typedef struct MqttContext{
 class MqttSession : public std::enable_shared_from_this<MqttSession> {
     
     public:
-        MqttSession( PSocket psocket ) : 
-            _client{psocket},  
-            _timer{psocket->get_io_service()}, 
-            _strand{psocket->get_io_service()}, 
-            _atime{system_clock::now()}, 
-            _client{psocket} 
+        MqttSession( PSocket p_socket )
+            : _client{ std::make_shared<MqttClient>(p_socket) }, _timer{ p_socket->get_io_service() },
+            _strand{p_socket->get_io_service()},
+            _atime{system_clock::now()}
         {
         }
-        
+    
         virtual ~MqttSession(){
-            this->_thread.join();
         }
-        
-        void start() {  //每生成一个新的chat_session都会调用
-            auto self = this->shared_from_this();
-            // auto self( shared_from_this() );
-
-            // this->_client.func_OnLogin = [self](){ //登录成功时
-            //     self->_atime = system_clock::now();
-            //     self->do_active(ACTIVE_TIME);
-            // };
-            
-            // this->_client.func_OnWrite = [self](){ //写入消息时
-            //     self->_atime = system_clock::now();
-            // };
-            
-            // this->_client.func_OnUnLogin = [self](){ //退出登录 或 出错 强制断开时
-            //     self->do_close();
-            // };
-            
-            // this->_strand.dispatch( [self](){
-            //     self->do_read_message(); //异步读客户端发来的消息
-            // } );
-            
-            // _thread = std::thread([self](){
-            //     while(! self->_psocket->get_io_service().stopped()){
-            //         self->_client.sendRunLoop(*self->_psocket);
-            //     }
-            // });
-        }
-        
-
-        PClient& client()
+    
+        PMqttClient& client()
         {
-            return this->_psocket;
+            return this->_client;
+        }
+    
+        void start() {  //每生成一个新的chat_session都会调用
+            auto self( this->shared_from_this() );
+            
+            this->_client->func_OnLogin = [self](){ //登录成功时
+                self->_atime = system_clock::now();
+                self->do_active(ACTIVE_TIME);
+            };
+            
+            this->_client->func_OnWrite = [self](){ //写入消息时
+                self->_atime = system_clock::now();
+            };
+            
+            this->_client->func_OnUnLogin = [self](){ //退出登录 或 出错 强制断开时
+                self->do_close();
+            };
+            
+            this->_strand.dispatch( [self](){
+                self->do_read_message(); //异步读客户端发来的消息
+            } );
         }
 
+    
     private:
+    
         void do_read_message() {
             auto self(shared_from_this());
             std::shared_ptr<MqttContext> context = std::make_shared<MqttContext>();
@@ -101,29 +91,29 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                 if (!ec) {
                     self->_atime = system_clock::now();
                     self->_strand.dispatch([self, &pmsg](){
-                        self->_client.deliver(*pmsg); ///?
+                        self->_client->deliver(*pmsg); ///?
                     });
-
+                    
                     self->_strand.dispatch( [self](){
                         self->do_read_message(); //异步读客户端发来的消息
                     } );
                     
                 } else {
                     //出错或未读到数据
-
-                    if (self->_client.func_OnUnLogin != nullptr) {
-                        self->_client.func_OnUnLogin();
+                    
+                    if (self->_client->func_OnUnLogin != nullptr) {
+                        self->_client->func_OnUnLogin();
                     }
                     self->do_close();
                 }
             };
             
-            this->_psocket->async_read_some(buffer(context->head, sizeof(context->head)), [self, context](const error_code& ec, size_t bytes_transferred ){
+            this->_client->Socket()->async_read_some(buffer(context->head, sizeof(context->head)), [self, context](const error_code& ec, size_t bytes_transferred ){
                 if (!ec && bytes_transferred > 0) {
                     MQTTHeader mh =  *(reinterpret_cast<MQTTHeader *>( &context->head[0] ));
                     
                     if (bytes_transferred > 1 ) { //已读出全部或部分长度数据
-                    
+                        
                         if( context->head[bytes_transferred-1] < 0x80) { //已读出全部长度数据
                             vector<Uint8> tmp;
                             std::copy(context->head + 1, context->head + bytes_transferred, std::back_inserter(tmp));
@@ -144,11 +134,11 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                                 } else {
                                     //出错或未读到数据
                                     
-                                    if (self->_client.func_OnUnLogin != nullptr) {
-                                        self->_client.func_OnUnLogin();
+                                    if (self->_client->func_OnUnLogin != nullptr) {
+                                        self->_client->func_OnUnLogin();
                                     }
                                     self->do_close();
-
+                                    
                                 }
                                 
                             });
@@ -164,27 +154,28 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                             } else {
                                 
                                 //出错或未读到数据
-                                if (self->_client.func_OnUnLogin != nullptr) {
-                                    self->_client.func_OnUnLogin();
+                                if (self->_client->func_OnUnLogin != nullptr) {
+                                    self->_client->func_OnUnLogin();
                                 }
                                 self->do_close();
-
+                                
                             }
                         });
                     }
                     
                 } else {
-                
+                    
                     //出错或未读到数据
-                    if (self->_client.func_OnUnLogin != nullptr) {
-                        self->_client.func_OnUnLogin();
+                    if (self->_client->func_OnUnLogin != nullptr) {
+                        self->_client->func_OnUnLogin();
                     }
                     self->do_close();
-
+                    
                 }
             });
         }
-        
+    
+    
         /**
          * data 缓冲区指针
          * len 缓冲区大小
@@ -195,11 +186,11 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
             if(len == readed_len) {
                 return;
             }
-        
+            
             auto self(shared_from_this());
-            this->_psocket->async_read_some( buffer( data + readed_len, (len-readed_len) ), [self, data, len, readed_len, func=std::move(func)](const error_code& ec, size_t bytes_transferred) mutable {
+            this->_client->Socket()->async_read_some( buffer( data + readed_len, (len-readed_len) ), [self, data, len, readed_len, func=std::move(func)](const error_code& ec, size_t bytes_transferred) mutable {
                 if (!ec) {
-
+                    
                     bool flag = false;    //是否读完长度字段
                     Uint8 len_size = 0;   //长度所占字节数
                     
@@ -217,7 +208,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                         size_t len = decLen(tmp);
                         error_code error(boost::system::errc::success, boost::system::system_category());
                         func(error, (Uint)len, len_size, (Uint)(readed_len + bytes_transferred) );
-
+                        
                     } else {
                         self->do_read_len( data, len , readed_len+bytes_transferred, std::move(func) );
                     }
@@ -227,15 +218,17 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                 }
             });
         }
-        
+    
+    
+    
         /** 超长内容 分多次递归接收
-         * context 
+         * context
          * readded_n 已读字节数
-         * header 
+         * header
          * size payload长度
          */
         void do_read_remainder(const std::shared_ptr<MqttContext> context, size_t readed_n,  const MQTTHeader header, size_t size) {
-
+            
             auto self(shared_from_this());
             
             if ( size > 0 ) { //如果 body size > 0, 则有 可变头 或 payload
@@ -247,7 +240,9 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                     buf_size = SOCKET_RECV_BUFFER_SIZE + readed_n >= size ? SOCKET_SEND_BUFFER_SIZE : size - readed_n;
                 }
                 
-                async_read(*this->_psocket, buffer( context->pdata->data() + readed_n, size ), [context, self, readed_n, size, header](const error_code& ec, size_t bytes_transferred){
+                async_read(*(this->_client->Socket()),
+                           buffer( context->pdata->data() + readed_n, size ), [context, self, readed_n, size, header](const error_code& ec, size_t bytes_transferred)
+                {
                     if(!ec) {
                         if (readed_n + bytes_transferred < size) { //如果没读完, 递归继续读
                             self->do_read_remainder( context, readed_n + bytes_transferred, header, size );
@@ -277,9 +272,9 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                 }
             }
         }
-
-        
-        
+    
+    
+    
         int write(MqttMessage &msg, std::function<void(const error_code& ec)> &&func){
             std::shared_ptr<vector<Uint8>> pbuf = make_shared<vector<Uint8>>();
             Int ret = msg.encode(*pbuf);
@@ -292,7 +287,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
             });
             return 0;
         }
-        
+    
         /** 超长内容 分多次递归发送
          * buf 发送缓冲区
          * writed_len 已发送字节数
@@ -312,7 +307,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
             } else {
                 buf_size = SOCKET_SEND_BUFFER_SIZE + writed_len >= pbuf->size() ? SOCKET_SEND_BUFFER_SIZE : pbuf->size() - writed_len;
             }
-            async_write(*this->_psocket,
+            async_write(*(this->_client->Socket()),
                         buffer(pbuf->data()+writed_len, buf_size),
                         [self, pbuf, writed_len, func = std::move(func)](const error_code& ec, size_t bytes_transferred) mutable
                         {
@@ -325,9 +320,9 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                             }
                         });
         }
-        
-        
-        
+    
+    
+    
         unique_ptr<MqttMessage> parseMqtt(MQTTHeader header, const vector<Uint8> &data){
             switch (header.Command) {
                 case CONNECT: {  //客户端到服务端, 客户端请求连接服务端
@@ -404,8 +399,8 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                     return nullptr;
             }
         }
-
-        
+    
+    
         /** later秒之后检查心跳
          */
         void do_active(int later){
@@ -416,9 +411,9 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                 if (!ec) { //
                     
                     typedef duration<int> seconds_type;
-                //    typedef std::chrono::duration<int, std::milli> milliseconds_type;
-                //    typedef std::chrono::duration<int, std::ratio<60*60>> hours_type;
-                //    hours_type h_oneday (24);                  // 24h
+                    //    typedef std::chrono::duration<int, std::milli> milliseconds_type;
+                    //    typedef std::chrono::duration<int, std::ratio<60*60>> hours_type;
+                    //    hours_type h_oneday (24);                  // 24h
                     if ( duration_cast< seconds_type >(system_clock::now() - self->_atime).count() >  (ACTIVE_TIME)) {
                         //心跳异常, 超时处理
                         self->do_close();
@@ -434,28 +429,21 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                 
             });
         }
-        
-
-
-        
+    
         void do_close() {
             error_code ec;
             
             _timer.cancel(ec);
+            this->_client->close();
         }
-
-
-        PSocket _psocket;
-
-        PClient _client;
+    
+    
+    private:
+        PMqttClient _client;
 
         boost::asio::deadline_timer _timer;
-        boost::asio::strand _strand;
+        boost::asio::io_context::strand _strand;
         time_point<system_clock> _atime;    //最后活动时间
-        
-        std::thread _thread;
-        
-        // MqttClient _client;
     };
 
 

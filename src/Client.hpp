@@ -20,28 +20,33 @@
 
 using ASocket = boost::asio::ip::tcp::socket;
 
-using boost::asio::ip::tcp;
 
 class Client;
+typedef std::shared_ptr<Client> PClient;
 
 typedef std::shared_ptr<ASocket> PSocket;
 typedef std::weak_ptr<ASocket> WPSocket;
-typedef std::shared_ptr<Client> PClient;
+
 
 
 /** 参与者 */
 class Client {
     public:
         explicit Client() {}
-        explicit Client(PSocket psocket) : _psocket{psocket} { }
-        virtual ~Client() {
-            _psocket->shutdown(ASocket::shutdown_both, ec); //彻底关闭该socket上所有通信
-            _psocket->close(ec);                                    //fd引用计数-1
+    
+        explicit Client(PSocket psocket) : _psocket{psocket}
+        {
         }
+    
+        virtual ~Client() {}
         virtual void deliver(const MqttMessage& msg) = 0; //后面需要重载
     
+        virtual void close() = 0;
+    
+        PSocket& Socket(){return this->_psocket;}
+    
     public:
-        WPSocket _psocket;
+        PSocket _psocket;
 };
 
 

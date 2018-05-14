@@ -21,7 +21,7 @@ int main(int argc, char* argv[])
 {
     try {
         if (argc != 4) {
-            std::cerr << "<IP> <port> <threads>\n";
+            std::cerr << argv[0] << " <IP> <port> <threads>\n";
             return 1;
         }
         

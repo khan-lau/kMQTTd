@@ -25,6 +25,11 @@ using boost::system::error_code;
 using boost::asio::buffer;
 using boost::asio::ip::tcp;
 
+
+class MqttClient;
+typedef std::shared_ptr<MqttClient> PMqttClient;
+
+
 class Package {
     
     public:
@@ -52,16 +57,14 @@ class Package {
 
 
 class MqttClient : public Client,  public std::enable_shared_from_this<MqttClient> {
-    
     public:
 
-        explicit MqttClient(PSocket psocket) : _logined{false} {
-            this->_psocket = psocket;
+        explicit MqttClient(PSocket p_socket) : _logined{false} {
+            this->_psocket = p_socket;
         }
 
         virtual ~MqttClient() {
-            // _psocket->shutdown(ASocket::shutdown_both, ec); //彻底关闭该socket上所有通信
-            // _psocket->close(ec);                                    //fd引用计数-1
+
         }
         
         virtual void sendRunLoop(ASocket &socket) {
@@ -169,7 +172,12 @@ class MqttClient : public Client,  public std::enable_shared_from_this<MqttClien
             }
         }
     
-    
+        void close(){
+            error_code ec;
+            
+            this->_psocket->shutdown(ASocket::shutdown_both, ec);//彻底关闭该socket上所有通信
+            this->_psocket->close(ec);  //fd引用计数-1
+        }
     
     private:
         void onAuth(const MqttConnect& msg){
@@ -329,44 +337,11 @@ class MqttClient : public Client,  public std::enable_shared_from_this<MqttClien
          * func 发送完成后回调
          */
         void do_write( const std::shared_ptr<vector<Uint8>> pbuf, size_t writed_len, std::function<void(const error_code& ec)> &&func) {
-            
-            auto self(shared_from_this());
-            if (writed_len >= pbuf->size()) {
-                return;
-            }
-            
-            size_t buf_size = 0;
-            
-            if (pbuf->size() < SOCKET_SEND_BUFFER_SIZE) {
-                buf_size = pbuf->size() ;
-            } else {
-                buf_size = SOCKET_SEND_BUFFER_SIZE + writed_len >= pbuf->size() ? SOCKET_SEND_BUFFER_SIZE : pbuf->size() - writed_len;
-            }
-            if ( !this->_psocket.expired() ) { //如果指针指向的shared_ptr还有效
 
-                std::shared_ptr<ASocket> sp = this->_psocket.lock();
-                if (sp != nullptr) {
-                    sp->async_send(
-                                buffer(pbuf->data()+writed_len, buf_size),
-                                [self, pbuf, writed_len, func = std::move(func)](const error_code& ec, size_t bytes_transferred) mutable
-                                {
-                                    if(!ec){
-                                        if (writed_len + bytes_transferred < pbuf->size()) {
-                                            self->do_write( pbuf, writed_len + bytes_transferred, std::move(func) );
-                                        }
-                                    } else {
-                                        func(ec);
-                                    }
-                                });
-                } else {
-                    error_code error(4, mqtt_category());
-                    func(error);
-                }
-            } else {
-                error_code error(4, mqtt_category());
-                func(error);
-            }
         }
+    
+    
+
         
     public:
         
