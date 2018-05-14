@@ -12,7 +12,7 @@
 #include <string>
 #include <iostream>
 #include <vector>
-#include <chrono>
+// #include <chrono>
 #include <functional>
 // #include <future>
 
@@ -21,14 +21,15 @@
 #include "MqttClient.hpp"
 #include "MqttSession.hpp"
 
-using std::cout;
-using std::endl;
+// using std::cout;
+// using std::endl;
 using std::string;
 using std::vector;
 
 using boost::asio::ip::tcp;
 using boost::asio::ip::address;
 
+typedef size_t(boost::asio::io_context::* PMF)();  //成员函数指针
 
 class MQTTServer : private boost::noncopyable
 {
@@ -41,9 +42,9 @@ class MQTTServer : private boost::noncopyable
          * @param strPort 绑定端口号
          * @param nThreads 线程数
          */
-        MQTTServer(string const &strIP, string const &strPort, std::size_t nThreads) : _acceptor{_ioService}, _nThreads{nThreads}
+        MQTTServer(string const &strIP, string const &strPort, std::size_t nThreads) : _acceptor{_ioContent}, _nThreads{nThreads}
         {
-            tcp::resolver resolver(_ioService);
+            tcp::resolver resolver(_ioContent);
             tcp::resolver::query query(strIP, strPort);
             tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
             boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
@@ -59,7 +60,7 @@ class MQTTServer : private boost::noncopyable
 
         void Stop()
         {
-            _ioService.stop();
+            _ioContent.stop();
             for (std::vector<std::shared_ptr<std::thread>>::const_iterator it = _listThread.cbegin();
                 it != _listThread.cend(); ++ it)
             {
@@ -69,9 +70,12 @@ class MQTTServer : private boost::noncopyable
 
         void Start() {
             for (int i = 0; i != _nThreads; ++i) {
-                std::shared_ptr<std::thread> pTh( new std::thread([this](){
-                    this->_ioService.run();
-                }));
+                // std::shared_ptr<std::thread> pTh( new std::thread([this](){
+                //     this->_ioContent.run();
+                // }));
+                
+                //boost::asio::io_context::* 成员函数指针
+                std::shared_ptr<std::thread> pTh(new std::thread(std::bind(static_cast<PMF>(&boost::asio::io_context::run), &_ioContent)));  
                 _listThread.push_back(pTh);
             }
         }
@@ -81,16 +85,17 @@ class MQTTServer : private boost::noncopyable
 
     private:
 
-
         void StartAccept()
         {
-            _acceptor.async_accept( [this](const boost::system::error_code& error, ASocket new_socket){
+            _acceptor.async_accept( [this](const boost::system::error_code& ec, ASocket new_socket){
 
-                if (!error) {
+                if (!ec) {
                     //@TODO 此处可以于ip黑名单或其他基于ip过滤的功能
                     if ( this->_blackList.end() == std::find(std::begin(this->_blackList), std::end(this->_blackList), new_socket.remote_endpoint().address() ) ) {
                         PSocket p_socket = std::make_shared<ASocket>( std::move(new_socket) );
-                        std::shared_ptr<MqttSession> p_session = std::make_shared<MqttSession>( std::move(p_socket) ); //构造了一个shared_ptr指针, 等同于 shared_ptr p(_csocket);
+
+                        //构造了一个shared_ptr指针, 等同于 shared_ptr p(_csocket);
+                        std::shared_ptr<MqttSession> p_session = std::make_shared<MqttSession>( std::move(p_socket) ); 
                         p_session->start();
                     }
                 }
@@ -100,7 +105,7 @@ class MQTTServer : private boost::noncopyable
 
 
     private:
-        boost::asio::io_service _ioService;
+        boost::asio::io_context _ioContent;
         boost::asio::ip::tcp::acceptor _acceptor;
         std::vector<std::shared_ptr<std::thread>> _listThread;
         std::size_t _nThreads;

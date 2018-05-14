@@ -31,8 +31,6 @@ using boost::asio::async_read;
 using boost::asio::async_write;
 
 
-//typedef deque<MqttMessage> message_queue;
-
 typedef struct MqttContext{
     Uint8 head[5]; //读header 和 不超过4字节的长度 size
     
@@ -46,13 +44,14 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
     
     public:
         MqttSession( PSocket p_socket )
-            : _client{ std::make_shared<MqttClient>(p_socket) }, _timer{ p_socket->get_io_service() },
-            _strand{p_socket->get_io_service()},
+            : _client{ std::make_shared<MqttClient>(p_socket) }, _timer{ p_socket->get_io_context() },
+            _strand{p_socket->get_io_context()},
             _atime{system_clock::now()}
         {
         }
     
         virtual ~MqttSession(){
+            this->_thread.join();
         }
     
         PMqttClient& client()
@@ -79,15 +78,51 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
             this->_strand.dispatch( [self](){
                 self->do_read_message(); //异步读客户端发来的消息
             } );
+
+
+            _thread = std::thread([self](){ //启动时发现未发送消息, 则统一另启线程推送
+                while(! self->_client->Socket()->get_io_context().stopped()){
+                    self->_client->sendRunLoop();
+                }
+            });
         }
 
     
     private:
+
+        /**
+         * @brief 返回length字段的size
+         * 
+         * @param data 缓冲区
+         * @param len 缓冲区大小
+         * @return Int8 size, -1表示出错; 0表示未结尾; >0 表示位置, 位置从1开始
+         */
+        Int8 length_ending(Uint8 *data, size_t len){
+            if (nullptr == data || len < 1) return -1;
+
+            for (Uint8 i = 0; i < len; i++) {
+                if ( *( data + i ) < 0x80 ) {
+                    return i+1;
+                }
+            }
+            return 0;
+        }
+
+        /**
+         * @brief 处理异常出错
+         * 
+         */
+        void do_error(){
+            if (this->_client->func_OnUnLogin != nullptr) {
+                this->_client->func_OnUnLogin();
+            }
+            this->do_close();
+        }
     
         void do_read_message() {
             auto self(shared_from_this());
             std::shared_ptr<MqttContext> context = std::make_shared<MqttContext>();
-            context->func = [self](const error_code& ec, std::shared_ptr<MqttMessage> pmsg) {
+            context->func = [self](const error_code& ec, std::shared_ptr<MqttMessage> pmsg) { //读取到消息后的回调函数
                 if (!ec) {
                     self->_atime = system_clock::now();
                     self->_strand.dispatch([self, &pmsg](){
@@ -100,23 +135,20 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                     
                 } else {
                     //出错或未读到数据
-                    
-                    if (self->_client->func_OnUnLogin != nullptr) {
-                        self->_client->func_OnUnLogin();
-                    }
-                    self->do_close();
+                    self->do_error();
                 }
             };
             
             this->_client->Socket()->async_read_some(buffer(context->head, sizeof(context->head)), [self, context](const error_code& ec, size_t bytes_transferred ){
                 if (!ec && bytes_transferred > 0) {
-                    MQTTHeader mh =  *(reinterpret_cast<MQTTHeader *>( &context->head[0] ));
+                    MQTTHeader mh =  *(reinterpret_cast<MQTTHeader *>( &context->head[0] ));  //header
                     
                     if (bytes_transferred > 1 ) { //已读出全部或部分长度数据
-                        
-                        if( context->head[bytes_transferred-1] < 0x80) { //已读出全部长度数据
+                        Uint8 * pbuf =  (context->head + 1);
+                        Int8 ending = self->length_ending(pbuf, bytes_transferred );
+                        if( ending > 0) { //已读出全部长度数据
                             vector<Uint8> tmp;
-                            std::copy(context->head + 1, context->head + bytes_transferred, std::back_inserter(tmp));
+                            std::copy(pbuf, context->head + ending, std::back_inserter(tmp));
                             size_t len = decLen(tmp);
                             
                             context->pdata = make_unique<vector<Uint8>>( bytes_transferred + len  );
@@ -124,7 +156,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                             
                             self->do_read_remainder(context, bytes_transferred, mh, len );
                             
-                        } else {
+                        } else if (ending == 0) { //长度未到结尾
                             self->do_read_len(context->head + sizeof(MQTTHeader), sizeof(context->head)-1 , bytes_transferred-1, [self, context, mh](const error_code& ec, Uint len, Uint len_size, Uint buffer_size){
                                 if (!ec) {
                                     context->pdata = make_unique<vector<Uint8>>(  sizeof(MQTTHeader) + len_size + len  );
@@ -132,19 +164,15 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                                     
                                     self->do_read_remainder(context, 1 + buffer_size, mh, len);
                                 } else {
-                                    //出错或未读到数据
-                                    
-                                    if (self->_client->func_OnUnLogin != nullptr) {
-                                        self->_client->func_OnUnLogin();
-                                    }
-                                    self->do_close();
-                                    
+                                    self->do_error();
                                 }
                                 
                             });
+                        } else { //出错
+                            self->do_error();
                         }
                         
-                    } else { //未读到任何长度字段
+                    } else { //未读到 length 字段
                         self->do_read_len(context->head + 1, sizeof(context->head)-1 , bytes_transferred-1, [self, context, mh](const error_code& ec, Uint len, Uint len_size, Uint buffer_size){
                             if (!ec) {
                                 context->pdata = make_unique<vector<Uint8>>(  sizeof(MQTTHeader) + len_size + len  );
@@ -152,25 +180,13 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                                 
                                 self->do_read_remainder(context, 1 + buffer_size, mh, len);
                             } else {
-                                
-                                //出错或未读到数据
-                                if (self->_client->func_OnUnLogin != nullptr) {
-                                    self->_client->func_OnUnLogin();
-                                }
-                                self->do_close();
-                                
+                                self->do_error();
                             }
                         });
                     }
                     
                 } else {
-                    
-                    //出错或未读到数据
-                    if (self->_client->func_OnUnLogin != nullptr) {
-                        self->_client->func_OnUnLogin();
-                    }
-                    self->do_close();
-                    
+                    self->do_error();
                 }
             });
         }
@@ -190,19 +206,10 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
             auto self(shared_from_this());
             this->_client->Socket()->async_read_some( buffer( data + readed_len, (len-readed_len) ), [self, data, len, readed_len, func=std::move(func)](const error_code& ec, size_t bytes_transferred) mutable {
                 if (!ec) {
-                    
-                    bool flag = false;    //是否读完长度字段
-                    Uint8 len_size = 0;   //长度所占字节数
-                    
-                    for (Uint8 i = 0; i < bytes_transferred; i++) {
-                        if ( *( data + readed_len + i ) < 0x80 ) {
-                            flag = true;
-                            len_size = readed_len + i;
-                            break;
-                        }
-                    }
-                    
-                    if(flag) {
+
+                    Int8 ending = self->length_ending((data + readed_len),  bytes_transferred);
+                    if( ending > 0) {  //是否读完长度字段
+                        Uint8 len_size = readed_len + ending;  //长度所占字节数
                         vector<Uint8> tmp;
                         std::copy(data, data + len_size , std::back_inserter(tmp));
                         size_t len = decLen(tmp);
@@ -311,7 +318,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                         buffer(pbuf->data()+writed_len, buf_size),
                         [self, pbuf, writed_len, func = std::move(func)](const error_code& ec, size_t bytes_transferred) mutable
                         {
-                            if(!ec){
+                            if(!ec) {
                                 if (writed_len + bytes_transferred < pbuf->size()) {
                                     self->do_write( pbuf, writed_len + bytes_transferred, std::move(func) );
                                 }
@@ -444,6 +451,8 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
         boost::asio::deadline_timer _timer;
         boost::asio::io_context::strand _strand;
         time_point<system_clock> _atime;    //最后活动时间
+
+        std::thread _thread;
     };
 
 

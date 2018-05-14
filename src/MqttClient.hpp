@@ -59,15 +59,15 @@ class Package {
 class MqttClient : public Client,  public std::enable_shared_from_this<MqttClient> {
     public:
 
-        explicit MqttClient(PSocket p_socket) : _logined{false} {
-            this->_psocket = p_socket;
+        explicit MqttClient(PSocket p_socket) : Client{p_socket}, _logined{false} {
+            // this->_psocket = p_socket;
         }
 
         virtual ~MqttClient() {
 
         }
         
-        virtual void sendRunLoop(ASocket &socket) {
+        virtual void sendRunLoop() {
         
         }
         

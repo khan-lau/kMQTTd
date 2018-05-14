@@ -3,7 +3,7 @@ project (MQTTd CXX)
 # cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
 # 区分debug和release
 # 在工程目录下，cmake -DCMAKE_BUILD_TYPE=DEBUG(RELEASE)，再执行make
-# cmake -G "Xcode" "-DCMAKE_OSX_ARCHITECTURES=x86_64;i386" ..  创建xcode工程
+# cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES=x86_64;i386 ..  创建xcode工程
 # cmake -G "Visual Studio 14 2015 Win64" ..   创建vc工程
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
