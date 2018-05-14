@@ -9,10 +9,11 @@
 #ifndef __MqttClient_HPP__
 #define __MqttClient_HPP__
 
-#include <boost/asio.hpp>
 #include <map>
 #include <vector>
 #include <tuple>
+
+#include <boost/asio.hpp>
 
 #include "Client.hpp"
 #include "VarTypes.h"
@@ -22,7 +23,6 @@ using boost::asio::async_read;
 using boost::asio::async_write;
 using boost::system::error_code;
 using boost::asio::buffer;
-using ASocket = boost::asio::ip::tcp::socket;
 using boost::asio::ip::tcp;
 
 class Package {
@@ -55,11 +55,14 @@ class MqttClient : public Client,  public std::enable_shared_from_this<MqttClien
     
     public:
 
-        explicit MqttClient(std::shared_ptr<ASocket> psocket) : _logined{false} {
+        explicit MqttClient(PSocket psocket) : _logined{false} {
             this->_psocket = psocket;
         }
 
-        virtual ~MqttClient() {}
+        virtual ~MqttClient() {
+            // _psocket->shutdown(ASocket::shutdown_both, ec); //彻底关闭该socket上所有通信
+            // _psocket->close(ec);                                    //fd引用计数-1
+        }
         
         virtual void sendRunLoop(ASocket &socket) {
         
@@ -379,7 +382,6 @@ class MqttClient : public Client,  public std::enable_shared_from_this<MqttClien
         std::function< void() > func_OnUnLogin;
         std::function< void() > func_OnWrite;
 };
-
 
 
 

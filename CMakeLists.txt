@@ -3,6 +3,8 @@ project (MQTTd CXX)
 # cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
 # 区分debug和release
 # 在工程目录下，cmake -DCMAKE_BUILD_TYPE=DEBUG(RELEASE)，再执行make
+# cmake "-DCMAKE_OSX_ARCHITECTURES=x86_64;i386" ..  创建xcode工程
+# cmake -G "Visual Studio 14 2015 Win64" ..   创建vc工程
 
 CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 
@@ -27,10 +29,11 @@ CHECK_CXX_COMPILER_FLAG("-std=c++14" COMPILER_SUPPORTS_CXX14)
 CHECK_CXX_COMPILER_FLAG("-std=c++1y" COMPILER_SUPPORTS_CXX1Y)
 CHECK_CXX_COMPILER_FLAG("-std=c++11" COMPILER_SUPPORTS_CXX11)
 
-if(COMPILER_SUPPORTS_CXX14) ## 判断是否支持c++14
-    add_definitions("-std=c++14")
+if(COMPILER_SUPPORTS_CXX17) ## 判断是否支持c++17
+    add_definitions("-std=c++17")
+	MESSAGE(STATUS "The compiler ${CMAKE_CXX_COMPILER} has C++17 support.")
 else()
-    MESSAGE(STATUS "ERROR - The compiler ${CMAKE_CXX_COMPILER} has no C++14 support. Please use a different C++ compiler.")
+    MESSAGE(STATUS "ERROR - The compiler ${CMAKE_CXX_COMPILER} has no C++17 support. Please use a different C++ compiler.")
 	RETURN()
 endif()
 
@@ -93,7 +96,7 @@ SET(SRC_LIST src/mqtt/VarTypes.h
 	src/MqttServer.hpp
 	src/MqttClient.hpp
 	src/ChTree.hpp
-	src/Session.hpp
+	src/MqttSession.hpp
 
 	src/MQTTd.cpp
 	src/MQTTc.cpp

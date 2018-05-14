@@ -1,5 +1,5 @@
 //
-//  Session.h
+//  Session.hpp
 //  MQTTd
 //
 //  Created by Khan on 16/3/25.
@@ -9,12 +9,11 @@
 #ifndef __SESSION_HPP__
 #define __SESSION_HPP__
 
-
+#include <string>
 #include <memory>
 #include <set>
 #include <queue>
 #include <thread>
-#include <string>
 
 #include <boost/asio.hpp>
 
@@ -33,10 +32,6 @@ using boost::asio::async_write;
 
 
 
-
-
-
-
 //typedef deque<MqttMessage> message_queue;
 
 typedef struct MqttContext{
@@ -48,59 +43,52 @@ typedef struct MqttContext{
 } *pMqttContext;
 
 
-class Session : public std::enable_shared_from_this<Session> {
+class MqttSession : public std::enable_shared_from_this<MqttSession> {
     
     public:
-        Session(boost::asio::io_service &ser)
-            :_psocket(std::make_shared<ASocket>(ser) ), _timer{ser}, _strand{ser}, _atime{system_clock::now()}, _client{_psocket} 
+        MqttSession( PSocket psocket ) : 
+            _client{psocket},  
+            _timer{psocket->get_io_service()}, 
+            _strand{psocket->get_io_service()}, 
+            _atime{system_clock::now()}, 
+            _client{psocket} 
         {
         }
-
-        typedef boost::shared_ptr<Session> CPSessionTcpCon;
-
-
-        static CPSessionTcpCon CreateNew(boost::asio::io_service& io_service) {
-            return CPSessionTcpCon(new Session(io_service));
-        }
-
-    public:
-        // Session( std::shared_ptr<ASocket> psocket ) : _psocket{psocket},  _timer{psocket->get_io_service()}, _strand{psocket->get_io_service()}, _atime{system_clock::now()}, _client{psocket} {
-        // }
         
-        virtual ~Session(){
+        virtual ~MqttSession(){
             this->_thread.join();
         }
         
         void start() {  //每生成一个新的chat_session都会调用
-            
-            auto self( shared_from_this() );
+            auto self = this->shared_from_this();
+            // auto self( shared_from_this() );
 
-            this->_client.func_OnLogin = [self](){ //登录成功时
-                self->_atime = system_clock::now();
-                self->do_active(ACTIVE_TIME);
-            };
+            // this->_client.func_OnLogin = [self](){ //登录成功时
+            //     self->_atime = system_clock::now();
+            //     self->do_active(ACTIVE_TIME);
+            // };
             
-            this->_client.func_OnWrite = [self](){ //写入消息时
-                self->_atime = system_clock::now();
-            };
+            // this->_client.func_OnWrite = [self](){ //写入消息时
+            //     self->_atime = system_clock::now();
+            // };
             
-            this->_client.func_OnUnLogin = [self](){ //退出登录 或 出错 强制断开时
-                self->do_close();
-            };
+            // this->_client.func_OnUnLogin = [self](){ //退出登录 或 出错 强制断开时
+            //     self->do_close();
+            // };
             
-            this->_strand.dispatch( [self](){
-                self->do_read_message(); //异步读客户端发来的消息
-            } );
+            // this->_strand.dispatch( [self](){
+            //     self->do_read_message(); //异步读客户端发来的消息
+            // } );
             
-            _thread = std::thread([self](){
-                while(! self->_psocket->get_io_service().stopped()){
-                    self->_client.sendRunLoop(*self->_psocket);
-                }
-            });
+            // _thread = std::thread([self](){
+            //     while(! self->_psocket->get_io_service().stopped()){
+            //         self->_client.sendRunLoop(*self->_psocket);
+            //     }
+            // });
         }
         
 
-        std::shared_ptr<ASocket>& socket()
+        PClient& client()
         {
             return this->_psocket;
         }
@@ -454,21 +442,20 @@ class Session : public std::enable_shared_from_this<Session> {
             error_code ec;
             
             _timer.cancel(ec);
-
-            _psocket->shutdown(ASocket::shutdown_both, ec); //彻底关闭该socket上所有通信
-            _psocket->close(ec);                                    //fd引用计数-1
         }
 
 
-        std::shared_ptr<ASocket> _psocket;
+        PSocket _psocket;
+
+        PClient _client;
+
         boost::asio::deadline_timer _timer;
         boost::asio::strand _strand;
-        // boost::asio::strand _strand;
         time_point<system_clock> _atime;    //最后活动时间
         
         std::thread _thread;
         
-        MqttClient _client;
+        // MqttClient _client;
     };
 
 

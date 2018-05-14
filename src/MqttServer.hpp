@@ -19,9 +19,8 @@
 #include <boost/asio.hpp>
 
 #include "MqttClient.hpp"
-#include "Session.hpp"
+#include "MqttSession.hpp"
 
-// using namespace std::chrono;
 using std::cout;
 using std::endl;
 using std::string;
@@ -36,7 +35,8 @@ class MQTTServer : private boost::noncopyable
     public:
 
 
-        MQTTServer(string const &strIP, string const &strPort, int nThreads) : _acceptor(_ioService) ,_nThreads(nThreads){
+        MQTTServer(string const &strIP, string const &strPort, std::size_t nThreads) : _acceptor{_ioService}, _nThreads{nThreads}
+        {
             tcp::resolver resolver(_ioService);
             tcp::resolver::query query(strIP, strPort);
             tcp::resolver::iterator endpoint_iterator = resolver.resolve(query);
@@ -70,24 +70,26 @@ class MQTTServer : private boost::noncopyable
             }
         }
 
+
+
+
     private:
+
+
         void StartAccept()
         {
-            Session::CPSessionTcpCon newSession = Session::CreateNew(_acceptor.get_io_service());
-            _acceptor.async_accept( newSession->socket(), 
-                    [this, &newSession]( const boost::system::error_code& ec )
-                    {
-                        if (!ec) {
-                            // //@TODO 此处可以于ip黑名单或其他基于ip过滤的功能
-                            // if ( this->_blackList.end() == std::find(std::begin(this->_blackList), std::end(this->_blackList), newSession->socket()->remote_endpoint().address() ) ) {
-                            //     std::make_shared<Session>( this->_ioService )->start();
-                            //     // newSession->start();
-                        }
-                    }
-                    StartAccept();
-            });
-        }
+            _acceptor.async_accept( [this](const boost::system::error_code& error, ASocket new_socket){
 
+                    if (!error) {
+                        //@TODO 此处可以于ip黑名单或其他基于ip过滤的功能
+                        // if ( this->_blackList.end() == std::find(std::begin(this->_blackList), std::end(this->_blackList), newSession->socket()->remote_endpoint().address() ) ) {
+                            PSocket p_socket = std::make_shared<ASocket>( std::move(new_socket) );
+                            std::shared_ptr<Session> p_session = std::make_shared<Session>( std::move(p_socket) ); //构造了一个shared_ptr指针, 等同于 shared_ptr p(_csocket);
+                            p_session->start();
+                    }
+                    this->StartAccept();
+                } );
+        }
 
 
     private:
