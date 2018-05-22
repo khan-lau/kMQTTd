@@ -148,7 +148,7 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                         Int8 ending = self->length_ending(pbuf, bytes_transferred );
                         if( ending > 0) { //已读出全部长度数据
                             vector<Uint8> tmp;
-                            std::copy(pbuf, context->head + ending, std::back_inserter(tmp));
+                            std::copy(pbuf, pbuf + ending, std::back_inserter(tmp));
                             size_t len = decLen(tmp);
                             
                             context->pdata = make_unique<vector<Uint8>>( bytes_transferred + len  );
@@ -157,7 +157,9 @@ class MqttSession : public std::enable_shared_from_this<MqttSession> {
                             self->do_read_remainder(context, bytes_transferred, mh, len );
                             
                         } else if (ending == 0) { //长度未到结尾
-                            self->do_read_len(context->head + sizeof(MQTTHeader), sizeof(context->head)-1 , bytes_transferred-1, [self, context, mh](const error_code& ec, Uint len, Uint len_size, Uint buffer_size){
+                            self->do_read_len(context->head + sizeof(MQTTHeader), sizeof(context->head)-1 , bytes_transferred-1, 
+                                            [self, context, mh](const error_code& ec, Uint len, Uint len_size, Uint buffer_size)
+                            {
                                 if (!ec) {
                                     context->pdata = make_unique<vector<Uint8>>(  sizeof(MQTTHeader) + len_size + len  );
                                     std::copy(context->head, context->head + buffer_size, std::begin(*context->pdata));

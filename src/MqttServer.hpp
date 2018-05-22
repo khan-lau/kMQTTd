@@ -10,19 +10,14 @@
 #define __MqttServer_HPP__
 
 #include <string>
-#include <iostream>
 #include <vector>
-// #include <chrono>
 #include <functional>
-// #include <future>
 
 #include <boost/asio.hpp>
 
 #include "MqttClient.hpp"
 #include "MqttSession.hpp"
 
-// using std::cout;
-// using std::endl;
 using std::string;
 using std::vector;
 
