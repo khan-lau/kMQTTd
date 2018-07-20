@@ -98,8 +98,8 @@ SET(SRC_LIST src/mqtt/VarTypes.h
 	src/ChTree.hpp
 	src/MqttSession.hpp
 
-	src/MQTTd.cpp
-	src/MQTTc.cpp
+	# src/MQTTd.cpp
+	# src/MQTTc.cpp
 	)
 
 # ADD_SUBDIRECTORY(lib)
