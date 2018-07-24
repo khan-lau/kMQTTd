@@ -1,4 +1,4 @@
-project (MQTTd CXX)
+project (kMQTTd CXX)
 
 # cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
 # 区分debug和release
@@ -98,22 +98,22 @@ SET(SRC_LIST src/mqtt/VarTypes.h
 	src/ChTree.hpp
 	src/MqttSession.hpp
 
-	# src/MQTTd.cpp
-	# src/MQTTc.cpp
+	# src/kMQTTd.cpp
+	# src/kMQTTc.cpp
 	)
 
 # ADD_SUBDIRECTORY(lib)
-ADD_EXECUTABLE("MQTTd" src/MQTTd.cpp ${SRC_LIST})
-ADD_EXECUTABLE("MQTTc" src/MQTTc.cpp ${SRC_LIST})
+ADD_EXECUTABLE("kMQTTd" src/kMQTTd.cpp ${SRC_LIST})
+ADD_EXECUTABLE("kMQTTc" src/kMQTTc.cpp ${SRC_LIST})
 
 
 IF (BOOST_INCLUDE_DIR AND Boost_LIBRARIES)
-	TARGET_LINK_LIBRARIES( "MQTTd" ${Boost_LIBRARIES} stdc++ pthread)
-	TARGET_LINK_LIBRARIES( "MQTTc" ${Boost_LIBRARIES} stdc++ pthread)
+	TARGET_LINK_LIBRARIES( "kMQTTd" ${Boost_LIBRARIES} stdc++ pthread)
+	TARGET_LINK_LIBRARIES( "kMQTTc" ${Boost_LIBRARIES} stdc++ pthread)
 ENDIF (BOOST_INCLUDE_DIR AND Boost_LIBRARIES)
 
 ##### Install target #####
-INSTALL (TARGETS MQTTd MQTTc
+INSTALL (TARGETS kMQTTd kMQTTc
 		RUNTIME DESTINATION bin
 		LIBRARY DESTINATION lib
 		ARCHIVE DESTINATION lib/static
@@ -125,7 +125,7 @@ INSTALL (FILES README.md LICENSE DESTINATION bin)
 ##### Uninstall target #####
 if(NOT TARGET uninstall)
 	CONFIGURE_FILE(
-		"${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
+		"${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.in.cmake"
 		"${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake"
 		IMMEDIATE @ONLY
 	)
