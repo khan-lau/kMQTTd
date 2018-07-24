@@ -32,7 +32,7 @@ cp -r ./boost/ ./build/include/boost/
 ``` shell
 make build
 cd build
-rm -rf * && cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
+rm -rf * && cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_INSTALL_PREFIX=./ -DCMAKE_BUILD_TYPE=DEBUG ..
 make
 ```
 

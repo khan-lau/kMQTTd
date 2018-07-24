@@ -31,6 +31,7 @@ int main(int argc, char* argv[])
         getchar();
         mySer.Stop();
     } catch (std::exception& e) {
+        // std::out << std::hex;
         std::cerr << "Exception: " << e.what() << "\n";
     }
     return 0;
