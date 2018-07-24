@@ -1,6 +1,6 @@
 project (kMQTTd CXX)
 
-# cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
+# cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_INSTALL_PREFIX=./ -DCMAKE_BUILD_TYPE=DEBUG ..
 # 区分debug和release
 # 在工程目录下，cmake -DCMAKE_BUILD_TYPE=DEBUG(RELEASE)，再执行make
 # cmake -G "Xcode" -DCMAKE_OSX_ARCHITECTURES=x86_64;i386 ..  创建xcode工程

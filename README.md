@@ -29,11 +29,18 @@ cp -r ./boost/ ./build/include/boost/
 ```
 
 
-## 3. 编译工程
+## 3. 编译安装工程
 
 ``` shell
 make build
 cd build
-rm -rf * && cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_BUILD_TYPE=DEBUG ..
-make
+rm -rf * && cmake -DCMAKE_CXX_COMPILER=clang -DCMAKE_INSTALL_PREFIX=./ -DCMAKE_BUILD_TYPE=DEBUG ..
+make && make install
+```
+
+## 4. 卸载
+
+```
+cd build
+make uninstall
 ```
