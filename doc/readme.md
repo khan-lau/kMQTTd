@@ -18,12 +18,10 @@ cd build
 ../bootstrap.sh --with-toolset=clang
 
 cd ..
-build/b2 --build-dir=./build toolset=clang address-model=64 link=static runtime-link=static \
+build/b2 install --prefix=build --build-dir=./build toolset=clang address-model=64 link=static runtime-link=static \
     --with-system --with-date_time --with-regex \
     cxxflags="-std=c++14 -stdlib=libc++" linkflags="-stdlib=libc++" \
     --stagedir=./build stage
-
-cp -r ./boost/ ./build/include/boost/
 ```
 
 
